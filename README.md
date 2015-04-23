@@ -1,6 +1,6 @@
 # osky-sample
 
-This repository contains a sample of ADS-B data as stored by the OpenSky Network. The raw messages are stored using the [Avro serialization system](https://avro.apache.org/) with the following schema:
+This repository contains a 5 minutes sample of ADS-B data as stored by the OpenSky Network. The raw messages are stored using the [Avro serialization system](https://avro.apache.org/) with the following schema:
 
 ```
 {
@@ -24,7 +24,7 @@ This repository contains a sample of ADS-B data as stored by the OpenSky Network
   ]
 }
 ```
-This repository contains a sample of 5 minutes ADS-B data from the OpenSky Network. If you need more, join the network or contact contact@opensky-network.org.
+There is also an example decoder included (see below). If you need more data for your research, contribute to the network with a sensor or send a mail to contact@opensky-network.org.
 
 ## Decoding
 
