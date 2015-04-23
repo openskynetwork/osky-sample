@@ -26,8 +26,14 @@ Raw messages are stored using the [Avro serialization system](https://avro.apach
 }
 ```
 
-You can use our [java-adsb](https://github.com/openskynetwork/java-adsb) library
-to read the data files and decode messages.
+
+## Decoding
+
+Use the included decoder to examine the dataset:
+
+`java -jar decoder.jar avro/raw20150421_sample.avro 100`
+
+will print out the first 100 raw and decoded records. The [source code](https://github.com/openskynetwork/java-adsb/blob/master/src/main/java/org/opensky/example/OskySampleReader.java) for this decoder can be found in the [java-adsb](https://github.com/openskynetwork/java-adsb) repository.
 
 ### avro/raw20150421\_sample.avro
 
