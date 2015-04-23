@@ -25,7 +25,7 @@ Raw messages are stored using the [Avro serialization system](https://avro.apach
   ]
 }
 ```
-
+If you 
 
 ## Decoding
 
