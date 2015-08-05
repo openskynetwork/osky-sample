@@ -24,7 +24,12 @@ This repository contains a 5 minutes sample of ADS-B data as stored by the OpenS
   ]
 }
 ```
-There is also an example decoder included (see below). If you need more data for your research, contribute to the network with a sensor or send a mail to contact@opensky-network.org.
+A example decoder is also provided (see below). We've been storing all messages received by our network for more than two years in this format. If you need more data for your research, contribute to the network with a sensor or send a mail to contact@opensky-network.org.
+
+## The data sample
+
+The OpenSky avro sample can be found [here](avro/raw20150421_sample.avro). This file contains 304131 records as received by the OpenSky Network on April,
+21st between 12:00 and 12:05 UTC. For more information, run e.g. `java -cp decoder.jar org.opensky.tools.AvroInfo avro/raw20150421_sample.avro` (see below).
 
 ## Decoding
 
@@ -34,8 +39,17 @@ Use the included decoder to examine the dataset:
 
 will print out the first 100 raw and decoded records. The [source code](https://github.com/openskynetwork/java-adsb/blob/master/src/main/java/org/opensky/example/OskySampleReader.java) for this decoder can be found in the [java-adsb](https://github.com/openskynetwork/java-adsb) repository.
 
-### avro/raw20150421\_sample.avro
+## Additional tools
 
-This file contains 303831 records as received by the OpenSky Network on April,
-21st between 12:00 and 12:05 UTC.
+The archive decoder.jar is a complete build of the [java-adsb project](https://github.com/openskynetwork/java-adsb). It currently includes the following tools for processing OpenSky's avro files. 
+
+#### AvroInfo
+
+This tool parses the avro file and prints useful information. For more information, run `java -cp decoder.jar org.opensky.tools.AvroInfo` or try `java -cp decoder.jar org.opensky.tools.AvroInfo avro/raw20150421_sample.avro`.
+
+#### Avro2Kml
+
+This tool parses the avro, decodes the messages and outputs file in the Keyhole Markup Language (KML). This file can e.g. be displayed by Google Earth. It will include all selected tracks and additional information extracted from the avro file. An example screenshot of the result for the avro sample provided in this repository can be found [here](img/kml_example.png).
+
+To generate a kml from the sample file, use `java -cp decoder.jar org.opensky.tools.Avro2Kml avro/raw20150421_sample.avro raw20150421_sample.kml`. Then open raw20150421_sample.kml using Google Earth. For more parameters (such as filters), run `java -cp decoder.jar org.opensky.tools.Avro2Kml -h`.
 
