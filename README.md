@@ -53,3 +53,8 @@ This tool parses the avro, decodes the messages and outputs file in the Keyhole 
 
 To generate a kml from the sample file, use `java -cp decoder.jar org.opensky.tools.Avro2Kml avro/raw20150421_sample.avro raw20150421_sample.kml`. Then open raw20150421_sample.kml using Google Earth. For more parameters (such as filters), run `java -cp decoder.jar org.opensky.tools.Avro2Kml -h`.
 
+#### ExtractArea
+
+This tool goes through OpenSky avro files and filters messages that were sent within a certain area. The area can be defined by a center coordinate and a radius. Output will be another avro filei.
+
+Example: To filter all messages from a 10 km radius around Zurich airport, you can use `java -cp decoder.jar org.opensky.tools.ExtractArea -c 8.55,47.45 -r 10000 avro/raw20150421_sample.avro airport_zurich.avro`. Use Avro2Kml to see the result in Google Earth.
