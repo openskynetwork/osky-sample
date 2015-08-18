@@ -58,3 +58,7 @@ To generate a kml from the sample file, use `java -cp decoder.jar org.opensky.to
 This tool goes through OpenSky avro files and filters messages that were sent within a certain area. The area can be defined by a center coordinate and a radius. Output will be another avro filei.
 
 Example: To filter all messages from a 10 km radius around Zurich airport, you can use `java -cp decoder.jar org.opensky.tools.ExtractArea -c 8.55,47.45 -r 10000 avro/raw20150421_sample.avro airport_zurich.avro`. Use Avro2Kml to see the result in Google Earth.
+
+#### Avro2SQLite
+
+This tool decodes the avro file and stores all positions and velocities in an sqlite database.
