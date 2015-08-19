@@ -61,4 +61,29 @@ Example: To filter all messages from a 10 km radius around Zurich airport, you c
 
 #### Avro2SQLite
 
-This tool decodes the avro file and stores all positions and velocities in an sqlite database.
+This tool decodes the avro file and stores all positions and velocities in an sqlite database. Do a `SELECT sql FROM sqlite_master;` on a SQLite3 file created with this tool to see the database structure.
+
+Example:
+```bash
+# convert sample avro to sqlite3 database
+java -cp decoder.jar org.opensky.tools.Avro2SQLite avro/raw20150421_sample.avro raw20150421_sample.sqlite3
+# ...
+
+# check out database
+sqlite3 raw20150421_sample.sqlite3 
+# Example query: show me two random flights
+# 
+# sqlite> SELECT id, icao24, callsign, DATETIME(first, 'unixepoch'), DATETIME(last, 'unixepoch') FROM flights ORDER BY RANDOM() LIMIT 2;
+# 370|406091|BAW605  |2015-04-21 12:00:01|2015-04-21 12:05:00
+# 568|400f00|EZY78WC |2015-04-21 12:00:06|2015-04-21 12:01:24
+# 
+# Now show me the last position of the flight with the callsign EZY78WC (id 568):
+# 
+# sqlite> SELECT DATETIME(timestamp, 'unixepoch'), longitude, latitude, altitude FROM positions WHERE flight=568 ORDER BY timestamp DESC LIMIT 1;
+# 2015-04-21 12:01:23|10.8334121704102|46.2030494819253|10058.4
+```
+#### AvroSort
+
+This tool sort unsorted OpenSky avro files by the time the messages arrived at the OpenSky server (timeAtServer). This is important for a proper position decoding since the decoder assumes messages to be ordered in time. Simply run `java -cp decoder.jar org.opensky.tools.AvroSort sample.avro sample_sorted.avro`.
+
+Note: the tools first loads all data into memory. So make sure you have enough memory available.
