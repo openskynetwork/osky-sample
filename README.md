@@ -86,4 +86,12 @@ sqlite3 raw20150421_sample.sqlite3
 
 This tool sort unsorted OpenSky avro files by the time the messages arrived at the OpenSky server (timeAtServer). This is important for a proper position decoding since the decoder assumes messages to be ordered in time. Simply run `java -cp decoder.jar org.opensky.tools.AvroSort sample.avro sample_sorted.avro`.
 
-Note: the tools first loads all data into memory. So make sure you have enough memory available.
+Note: the tools first loads all data into memory. So make sure you have enough memory available. Otherwise use AvroSplit to split the Avro file in consitent small files.
+
+#### AvroSplit
+
+This tool can be used to split one Avro file into an arbitrary number of smaller files without losing flight consistency. It can also be used to join multiple Avro files since it allows a arbitrary number of input as well as output files!
+
+Usage:
+  * `java -cp decoder.jar org.opensky.tools.AvroSplit -o outfile -n 5 sample.avro` -- splits sample.avro into 5 files called outfile1.avro, outfile2.avro, ...
+  * `java -cp decoder.jar org.opensky.tools.AvroSplit -o outfile in1.avro in2.avro ...` -- joins input files to one avro file outfile1.avro
