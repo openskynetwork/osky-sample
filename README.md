@@ -31,35 +31,27 @@ Please also check out the [slides](oskyws15_data_tools.pdf) on the data and tool
 ## The data sample
 
 The OpenSky avro sample can be found [here](avro/raw20150421_sample.avro). This file contains 304131 records as received by the OpenSky Network on April,
-21st between 12:00 and 12:05 UTC. For more information, run e.g. `java -cp decoder.jar org.opensky.tools.AvroInfo avro/raw20150421_sample.avro` (see below).
+21st between 12:00 and 12:05 UTC. For more information, run e.g. `java -cp tools-1.0-fat.jar org.opensky.tools.AvroInfo avro/raw20150421_sample.avro` (see below).
 
-## Decoding
+## Example Tools
 
-Use the included decoder to examine the dataset:
-
-`java -jar decoder.jar avro/raw20150421_sample.avro 100`
-
-will print out the first 100 raw and decoded records. The [source code](https://github.com/openskynetwork/java-adsb/blob/master/src/main/java/org/opensky/example/OskySampleReader.java) for this decoder can be found in the [java-adsb](https://github.com/openskynetwork/java-adsb) repository.
-
-## Additional tools
-
-The archive decoder.jar is a complete build of the [java-adsb project](https://github.com/openskynetwork/java-adsb). It currently includes the following tools for processing OpenSky's avro files. 
+All tools are based on the [java-adsb project](https://github.com/openskynetwork/java-adsb). In order to use the tools, build the package using `mvn package`. The archive tools-1.0-fat.jar (target/) currently includes the following tools for processing OpenSky's avro files. 
 
 #### AvroInfo
 
-This tool parses the avro file and prints useful information. For more information, run `java -cp decoder.jar org.opensky.tools.AvroInfo` or try `java -cp decoder.jar org.opensky.tools.AvroInfo avro/raw20150421_sample.avro`.
+This tool parses the avro file and prints useful information. For more information, run `java -cp tools-1.0-fat.jar org.opensky.tools.AvroInfo` or try `java -cp tools-1.0-fat.jar org.opensky.tools.AvroInfo avro/raw20150421_sample.avro`.
 
 #### Avro2Kml
 
 This tool parses the avro, decodes the messages and outputs file in the Keyhole Markup Language (KML). This file can e.g. be displayed by Google Earth. It will include all selected tracks and additional information extracted from the avro file. An example screenshot of the result for the avro sample provided in this repository can be found [here](img/kml_example.png).
 
-To generate a kml from the sample file, use `java -cp decoder.jar org.opensky.tools.Avro2Kml avro/raw20150421_sample.avro raw20150421_sample.kml`. Then open raw20150421_sample.kml using Google Earth. For more parameters (such as filters), run `java -cp decoder.jar org.opensky.tools.Avro2Kml -h`.
+To generate a kml from the sample file, use `java -cp tools-1.0-fat.jar org.opensky.tools.Avro2Kml avro/raw20150421_sample.avro raw20150421_sample.kml`. Then open raw20150421_sample.kml using Google Earth. For more parameters (such as filters), run `java -cp tools-1.0-fat.jar org.opensky.tools.Avro2Kml -h`.
 
 #### ExtractArea
 
 This tool goes through OpenSky avro files and filters messages that were sent within a certain area. The area can be defined by a center coordinate and a radius. Output will be another avro filei.
 
-Example: To filter all messages from a 10 km radius around Zurich airport, you can use `java -cp decoder.jar org.opensky.tools.ExtractArea -c 8.55,47.45 -r 10000 avro/raw20150421_sample.avro airport_zurich.avro`. Use Avro2Kml to see the result in Google Earth.
+Example: To filter all messages from a 10 km radius around Zurich airport, you can use `java -cp tools-1.0-fat.jar org.opensky.tools.ExtractArea -c 8.55,47.45 -r 10000 avro/raw20150421_sample.avro airport_zurich.avro`. Use Avro2Kml to see the result in Google Earth.
 
 #### Avro2SQLite
 
@@ -68,7 +60,7 @@ This tool decodes the avro file and stores all positions and velocities in an sq
 Example:
 ```bash
 # convert sample avro to sqlite3 database
-java -cp decoder.jar org.opensky.tools.Avro2SQLite avro/raw20150421_sample.avro raw20150421_sample.sqlite3
+java -cp tools-1.0-fat.jar org.opensky.tools.Avro2SQLite avro/raw20150421_sample.avro raw20150421_sample.sqlite3
 # ...
 
 # check out database
@@ -86,7 +78,7 @@ sqlite3 raw20150421_sample.sqlite3
 ```
 #### AvroSort
 
-This tool sort unsorted OpenSky avro files by the time the messages arrived at the OpenSky server (timeAtServer). This is important for a proper position decoding since the decoder assumes messages to be ordered in time. Simply run `java -cp decoder.jar org.opensky.tools.AvroSort sample.avro sample_sorted.avro`.
+This tool sort unsorted OpenSky avro files by the time the messages arrived at the OpenSky server (timeAtServer). This is important for a proper position decoding since the decoder assumes messages to be ordered in time. Simply run `java -cp tools-1.0-fat.jar org.opensky.tools.AvroSort sample.avro sample_sorted.avro`.
 
 Note: the tools first loads all data into memory. So make sure you have enough memory available. Otherwise use AvroSplit to split the Avro file in consitent small files.
 
@@ -95,5 +87,5 @@ Note: the tools first loads all data into memory. So make sure you have enough m
 This tool can be used to split one Avro file into an arbitrary number of smaller files without losing flight consistency. It can also be used to join multiple Avro files since it allows a arbitrary number of input as well as output files!
 
 Usage:
-  * `java -cp decoder.jar org.opensky.tools.AvroSplit -o outfile -n 5 sample.avro` -- splits sample.avro into 5 files called outfile1.avro, outfile2.avro, ...
-  * `java -cp decoder.jar org.opensky.tools.AvroSplit -o outfile in1.avro in2.avro ...` -- joins input files to one avro file outfile1.avro
+  * `java -cp tools-1.0-fat.jar org.opensky.tools.AvroSplit -o outfile -n 5 sample.avro` -- splits sample.avro into 5 files called outfile1.avro, outfile2.avro, ...
+  * `java -cp tools-1.0-fat.jar org.opensky.tools.AvroSplit -o outfile in1.avro in2.avro ...` -- joins input files to one avro file outfile1.avro
