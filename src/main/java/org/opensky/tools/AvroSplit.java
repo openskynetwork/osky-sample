@@ -54,6 +54,7 @@ public class AvroSplit {
 		opts.addOption("h", "help", false, "print this message" );
 		opts.addOption("o", "output", true, "prefix for output files (number of file will be appended)");
 		opts.addOption("n", "number", true, "number of output files (default: 1)");
+		opts.addOption("a", "anonymize", false, "remove sensor location from data (default: false)");
 
 		// parse command line options
 		CommandLineParser parser = new DefaultParser();
@@ -61,6 +62,7 @@ public class AvroSplit {
 		Integer num_files = 1;
 		String outpath = null;
 		List<String> inpaths = null;
+		boolean anonymize = false;
 		try {
 			cmd = parser.parse(opts, args);
 
@@ -83,6 +85,8 @@ public class AvroSplit {
 				printHelp(opts);
 				System.exit(0);
 			}
+
+			anonymize = cmd.hasOption("a");
 
 			// get filename
 			if (cmd.getArgList().size() == 0)
@@ -159,6 +163,12 @@ public class AvroSplit {
 
 					// get next record from file
 					ModeSEncodedMessage record = fileReader.next();
+					
+					if (anonymize) {
+						record.setSensorAltitude(null);
+						record.setSensorLatitude(null);
+						record.setSensorLongitude(null);
+					}
 
 					// determine file
 					try {
