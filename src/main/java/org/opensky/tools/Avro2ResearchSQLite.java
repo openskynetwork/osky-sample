@@ -28,6 +28,8 @@ import org.opensky.libadsb.tools;
 import org.opensky.libadsb.exceptions.BadFormatException;
 import org.opensky.libadsb.msgs.AirbornePositionMsg;
 import org.opensky.libadsb.msgs.ModeSReply;
+import org.opensky.libadsb.msgs.VelocityOverGroundMsg;
+import org.opensky.libadsb.msgs.ModeSReply.subtype;
 
 /**
  * OpenSky AVRO to SQLite converter
@@ -37,12 +39,12 @@ import org.opensky.libadsb.msgs.ModeSReply;
  * @author Matthias Schäfer (schaefer@opensky-network.org)
  *
  */
-public class Avro2TestData {
+public class Avro2ResearchSQLite {
 	Connection conn = null;
 	Statement stmt = null;
 
 	// initialize SQLite database
-	public Avro2TestData (String path) {
+	public Avro2ResearchSQLite (String path) {
 		try {
 			Class.forName("org.sqlite.JDBC");
 			conn = DriverManager.getConnection("jdbc:sqlite:"+path);
@@ -50,8 +52,8 @@ public class Avro2TestData {
 			stmt = conn.createStatement();
 
 			// create tables
-			String sql = "CREATE TABLE sensors\n"+
-					"(id INT PRIMARY KEY,\n"+
+			String sql = "CREATE TABLE sensor\n"+
+					"(id INT PRIMARY KEY NOT NULL,\n"+
 					" latitude REAL NOT NULL, -- sensor latitude\n"+
 					" longitude REAL NOT NULL, -- sensor longitude\n"+
 					" altitude REAL NOT NULL -- sensor altitude\n"+
@@ -59,9 +61,8 @@ public class Avro2TestData {
 
 			stmt.executeUpdate(sql);
 
-			sql = "CREATE TABLE positions\n"+
-					"(id INT PRIMARY KEY,\n"+
-					" sensor INT NOT NULL, -- references sensor from sensors table\n"+
+			sql = "CREATE TABLE position\n"+
+					"(sensor INT NOT NULL, -- references sensor from sensors table\n"+
 					" timeAtServer REAL NOT NULL, -- unix timestamp\n"+
 					" timeAtSensor INT NOT NULL, -- unix timestamp\n"+
 					" timestamp INT NOT NULL, -- rolling timestamp\n"+
@@ -69,11 +70,26 @@ public class Avro2TestData {
 					" longitude REAL NOT NULL, -- in decimal degrees\n"+
 					" altitude REAL NOT NULL, -- in meters\n"+
 					" rawMessage TEXT NOT NULL, -- raw message hex string\n"+
-					" FOREIGN KEY(sensor) REFERENCES sensors(id)\n"+
+					" FOREIGN KEY(sensor) REFERENCES sensor(id)\n"+
 					")";
 
 			stmt.executeUpdate(sql);
 
+			sql = "CREATE TABLE velocity\n"+
+					"(sensor INT NOT NULL, -- references sensor from sensors table\n"+
+					" timeAtServer REAL NOT NULL, -- unix timestamp\n"+
+					" timeAtSensor INT NOT NULL, -- unix timestamp\n"+
+					" timestamp INT NOT NULL, -- rolling timestamp\n"+
+					" rawMessage TEXT NOT NULL, -- raw message hex string\n"+
+					" horizontalSpeed REAL, -- in m/s\n"+
+					" verticalSpeed REAL, -- in m/s\n"+
+					" heading REAL, -- in clock-wise degrees from north\n"+
+					" geoMinusBaro REAL, -- in meters\n"+
+					" FOREIGN KEY(sensor) REFERENCES sensor(id)\n"+
+					")";
+
+			stmt.executeUpdate(sql);
+			
 		} catch ( Exception e ) {
 			System.err.println("Could not open database: " + e.getMessage() );
 			System.exit(1);
@@ -82,8 +98,8 @@ public class Avro2TestData {
 
 	public void insertSensor (int serial, Position pos) {
 		try {
-			String sql = String.format(Locale.ENGLISH, "INSERT OR REPLACE INTO sensors VALUES (%d, %f, %f, %f)",
-					serial, pos.getLatitude(), pos.getLongitude(), pos.getAltitude()*0.3048);
+			String sql = String.format(Locale.ENGLISH, "INSERT OR REPLACE INTO sensor VALUES (%d, %f, %f, %f)",
+					serial, pos.getLatitude(), pos.getLongitude(), pos.getAltitude());
 			stmt.executeUpdate(sql);
 		} catch (Exception e) {
 			System.err.println("Could not create sensor: "+e.getMessage());
@@ -93,11 +109,24 @@ public class Avro2TestData {
 
 	public void insertPosition (int sensor, double timeAtServer, long timeAtSensor, long timestamp, Position pos, String raw) {
 		try {
-			String sql = String.format(Locale.ENGLISH, "INSERT INTO positions (sensor, timeAtServer, timeAtSensor, timestamp, latitude, longitude, altitude, rawMessage) VALUES (%d, %f, %d, %d, %f, %f, %f, \"%s\")",
-					sensor, timeAtServer, timeAtSensor, timestamp, pos.getLatitude(), pos.getLongitude(), pos.getAltitude()*0.3048, raw);
+			String sql = String.format(Locale.ENGLISH, "INSERT INTO position (sensor, timeAtServer, timeAtSensor, timestamp, latitude, longitude, altitude, rawMessage) VALUES (%d, %f, %d, %d, %f, %f, %f, \"%s\")",
+					sensor, timeAtServer, timeAtSensor, timestamp, pos.getLatitude(), pos.getLongitude(), pos.getAltitude(), raw);
 			stmt.executeUpdate(sql);
 		} catch (Exception e) {
 			System.err.println("Could not insert position: "+e.getMessage());
+			e.printStackTrace();
+		}
+	}
+
+	public void insertVelocity (int sensor, double timeAtServer, long timeAtSensor,
+			long timestamp, Double horizSpeed, Double vertSpeed,
+			Double heading, Double geoMinusBaro, String raw) {
+		try {
+			String sql = String.format(Locale.ENGLISH, "INSERT INTO velocity (sensor, timeAtServer, timeAtSensor, timestamp, rawMessage, horizontalSpeed, verticalSpeed, heading, geoMinusBaro) VALUES (%d, %f, %d, %d, \"%s\", %f, %f, %f, %f)",
+					sensor, timeAtServer, timeAtSensor, timestamp, raw, horizSpeed, vertSpeed, heading, geoMinusBaro);
+			stmt.executeUpdate(sql);
+		} catch (Exception e) {
+			System.err.println("Could not insert velocity: "+e.getMessage());
 			e.printStackTrace();
 		}
 	}
@@ -122,11 +151,9 @@ public class Avro2TestData {
 	private class Flight {
 		public Double last; // last position message received
 		public PositionDecoder dec; // stateful position decoder
-		public Position last_position;
 
 		public Flight (long id) {
 			dec = new PositionDecoder();
-			this.last_position = new Position();
 		}
 	}
 
@@ -208,7 +235,7 @@ public class Avro2TestData {
 		long last_time;
 
 		// just a temporary instance for creating Flight-objects
-		Avro2TestData a2sql = new Avro2TestData(outpath);
+		Avro2ResearchSQLite a2sql = new Avro2ResearchSQLite(outpath);
 		try {
 			// open input file
 			DataFileReader<ModeSEncodedMessage> fileReader =
@@ -225,6 +252,7 @@ public class Avro2TestData {
 			// message registers
 			ModeSReply msg;
 			AirbornePositionMsg airpos;
+			VelocityOverGroundMsg velo;
 
 			// for flight handling
 			List<String> flights_to_remove = new ArrayList<String>();
@@ -276,7 +304,13 @@ public class Avro2TestData {
 					continue;
 				}
 
-				if (msg.getType() == ModeSReply.subtype.ADSB_AIRBORN_POSITION) {
+				Position rec = record.getSensorLatitude() != null ?
+						new Position(
+								record.getSensorLongitude(),
+								record.getSensorLatitude(),
+								record.getSensorAltitude()) : null;
+				
+				if (msg.getType() == subtype.ADSB_AIRBORN_POSITION) {
 					icao24 = tools.toHexString(msg.getIcao24());
 
 					// icao24 filter
@@ -304,18 +338,12 @@ public class Avro2TestData {
 					flight.last = record.getTimeAtServer();
 
 					airpos = (AirbornePositionMsg) msg;
-					Position rec = record.getSensorLatitude() != null ?
-							new Position(
-									record.getSensorLongitude(),
-									record.getSensorLatitude(),
-									record.getSensorAltitude()) : null;
 
 					airpos.setNICSupplementA(flight.dec.getNICSupplementA());
 					Position pos = flight.dec.decodePosition(record.getTimeAtServer(), rec, airpos);
 					if (pos == null || !pos.isReasonable())
 						++bad_pos_cnt;
-					else if (pos.isReasonable() && !pos.equals(flight.last_position)) { // filter duplicate positions
-						flight.last_position = pos;
+					else if (pos.isReasonable()) {
 						++good_pos_cnt;
 						if (record.getSensorType().toString().equals("OpenSky") || record.getSensorType().toString().equals("Radarcape")) {
 							a2sql.insertSensor(record.getSensorSerialNumber(), rec);
@@ -323,6 +351,19 @@ public class Avro2TestData {
 									Math.round(record.getTimeAtSensor()), Math.round(record.getTimestamp()),
 									pos, record.getRawMessage().toString());
 						}
+					}
+				}
+				else if (msg.getType() == subtype.ADSB_VELOCITY) {
+					velo = (VelocityOverGroundMsg) msg;
+					if (record.getSensorType().toString().equals("OpenSky") || record.getSensorType().toString().equals("Radarcape")) {
+						a2sql.insertSensor(record.getSensorSerialNumber(), rec);
+						a2sql.insertVelocity(record.getSensorSerialNumber(),  record.getTimeAtServer(),
+								Math.round(record.getTimeAtSensor()), Math.round(record.getTimestamp()),
+								velo.hasVelocityInfo() ? velo.getVelocity() : null,
+								velo.hasVerticalRateInfo() ? velo.getVerticalRate() : null,
+								velo.hasVelocityInfo() ? velo.getHeading() : null, 
+								velo.hasGeoMinusBaroInfo() ? velo.getGeoMinusBaro() : null,
+								record.getRawMessage().toString());
 					}
 				}
 				// ignore any other message
