@@ -252,7 +252,7 @@ public class ExtractArea {
 									record.getSensorLatitude(),
 									record.getSensorAltitude()) : null;
 
-					Position pos = flight.dec.decodePosition(record.getTimeAtServer(), rec, surfacepos);
+					Position pos = flight.dec.decodePosition(record.getTimeAtServer(), rec, surfacepos, rec);
 					if (pos != null) {
 						pos.setAltitude(0.0); // two-dimensional radius
 						if (pos.isReasonable() && pos.distanceTo(center)<=radius)

@@ -377,7 +377,7 @@ public class Avro2Kml {
 									record.getSensorLatitude(),
 									record.getSensorAltitude()) : null;
 					
-					Position pos = flight.dec.decodePosition(record.getTimeAtServer(), rec, surfacepos);
+					Position pos = flight.dec.decodePosition(record.getTimeAtServer(), rec, surfacepos, rec);
 					if (pos == null)
 						++err_pos_cnt;
 					else {

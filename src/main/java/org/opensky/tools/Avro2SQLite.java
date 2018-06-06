@@ -397,7 +397,7 @@ public class Avro2SQLite {
 									record.getSensorLatitude(),
 									record.getSensorAltitude()) : null;
 
-					Position pos = flight.dec.decodePosition(record.getTimeAtServer(), rec, surfacepos);
+					Position pos = flight.dec.decodePosition(record.getTimeAtServer(), rec, surfacepos, rec);
 					if (pos == null || !pos.isReasonable())
 						++bad_pos_cnt;
 					else if (pos.isReasonable() && !pos.equals(flight.last_position)) { // filter duplicate positions
