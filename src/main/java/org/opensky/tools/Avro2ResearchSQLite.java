@@ -64,8 +64,8 @@ public class Avro2ResearchSQLite {
 			sql = "CREATE TABLE position\n"+
 					"(sensor INT NOT NULL, -- references sensor from sensors table\n"+
 					" timeAtServer REAL NOT NULL, -- unix timestamp\n"+
-					" timeAtSensor INT NOT NULL, -- unix timestamp\n"+
-					" timestamp INT NOT NULL, -- rolling timestamp\n"+
+					" timeAtSensor INT, -- unix timestamp\n"+
+					" timestamp INT, -- rolling timestamp\n"+
 					" latitude REAL NOT NULL, -- in decimal degrees\n"+
 					" longitude REAL NOT NULL, -- in decimal degrees\n"+
 					" altitude REAL NOT NULL, -- in meters\n"+
@@ -78,8 +78,8 @@ public class Avro2ResearchSQLite {
 			sql = "CREATE TABLE velocity\n"+
 					"(sensor INT NOT NULL, -- references sensor from sensors table\n"+
 					" timeAtServer REAL NOT NULL, -- unix timestamp\n"+
-					" timeAtSensor INT NOT NULL, -- unix timestamp\n"+
-					" timestamp INT NOT NULL, -- rolling timestamp\n"+
+					" timeAtSensor INT, -- unix timestamp\n"+
+					" timestamp INT, -- rolling timestamp\n"+
 					" rawMessage TEXT NOT NULL, -- raw message hex string\n"+
 					" horizontalSpeed REAL, -- in m/s\n"+
 					" verticalSpeed REAL, -- in m/s\n"+
@@ -107,7 +107,7 @@ public class Avro2ResearchSQLite {
 		}
 	}
 
-	public void insertPosition (int sensor, double timeAtServer, long timeAtSensor, long timestamp, Position pos, String raw) {
+	public void insertPosition (int sensor, double timeAtServer, Long timeAtSensor, Long timestamp, Position pos, String raw) {
 		try {
 			String sql = String.format(Locale.ENGLISH, "INSERT INTO position (sensor, timeAtServer, timeAtSensor, timestamp, latitude, longitude, altitude, rawMessage) VALUES (%d, %f, %d, %d, %f, %f, %f, \"%s\")",
 					sensor, timeAtServer, timeAtSensor, timestamp, pos.getLatitude(), pos.getLongitude(), pos.getAltitude(), raw);
@@ -118,8 +118,8 @@ public class Avro2ResearchSQLite {
 		}
 	}
 
-	public void insertVelocity (int sensor, double timeAtServer, long timeAtSensor,
-			long timestamp, Double horizSpeed, Double vertSpeed,
+	public void insertVelocity (int sensor, double timeAtServer, Long timeAtSensor,
+			Long timestamp, Double horizSpeed, Double vertSpeed,
 			Double heading, Double geoMinusBaro, String raw) {
 		try {
 			String sql = String.format(Locale.ENGLISH, "INSERT INTO velocity (sensor, timeAtServer, timeAtSensor, timestamp, rawMessage, horizontalSpeed, verticalSpeed, heading, geoMinusBaro) VALUES (%d, %f, %d, %d, \"%s\", %f, %f, %f, %f)",
@@ -348,7 +348,8 @@ public class Avro2ResearchSQLite {
 						if (record.getSensorType().toString().equals("OpenSky") || record.getSensorType().toString().equals("Radarcape")) {
 							a2sql.insertSensor(record.getSensorSerialNumber(), rec);
 							a2sql.insertPosition(record.getSensorSerialNumber(), record.getTimeAtServer(),
-									Math.round(record.getTimeAtSensor()), Math.round(record.getTimestamp()),
+									record.getTimeAtSensor() != null ? Math.round(record.getTimeAtSensor()) : null,
+									record.getTimestamp() != null ? Math.round(record.getTimestamp()) : null,
 									pos, record.getRawMessage().toString());
 						}
 					}
@@ -358,7 +359,8 @@ public class Avro2ResearchSQLite {
 					if (record.getSensorType().toString().equals("OpenSky") || record.getSensorType().toString().equals("Radarcape")) {
 						a2sql.insertSensor(record.getSensorSerialNumber(), rec);
 						a2sql.insertVelocity(record.getSensorSerialNumber(),  record.getTimeAtServer(),
-								Math.round(record.getTimeAtSensor()), Math.round(record.getTimestamp()),
+								record.getTimeAtSensor() != null ? Math.round(record.getTimeAtSensor()) : null,
+								record.getTimestamp() != null ? Math.round(record.getTimestamp()) : null,
 								velo.hasVelocityInfo() ? velo.getVelocity() : null,
 								velo.hasVerticalRateInfo() ? velo.getVerticalRate() : null,
 								velo.hasVelocityInfo() ? velo.getHeading() : null, 
