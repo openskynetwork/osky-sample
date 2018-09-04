@@ -1,28 +1,23 @@
 package org.opensky.tools;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.DefaultParser;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
+import org.apache.commons.cli.*;
 import org.opensky.avro.v2.ModeSEncodedMessage;
 import org.opensky.libadsb.Decoder;
 import org.opensky.libadsb.exceptions.BadFormatException;
 import org.opensky.libadsb.msgs.ModeSReply;
 import org.opensky.libadsb.msgs.ModeSReply.subtype;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Read (possibly multiple) OpenSky Avro files, filter ADS-B messages only and

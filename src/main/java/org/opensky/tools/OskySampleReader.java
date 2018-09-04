@@ -1,16 +1,16 @@
 package org.opensky.tools;
 
-import java.io.File;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.Set;
-
 import org.apache.avro.Schema.Field;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.opensky.avro.v2.ModeSEncodedMessage;
 import org.opensky.example.ExampleDecoder;
+
+import java.io.File;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * OpenSky AVRO example decoder

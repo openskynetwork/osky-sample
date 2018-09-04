@@ -1,5 +1,22 @@
 package org.opensky.tools;
 
+import de.micromata.opengis.kml.v_2_2_0.*;
+import org.apache.avro.file.DataFileReader;
+import org.apache.avro.io.DatumReader;
+import org.apache.avro.specific.SpecificDatumReader;
+import org.apache.commons.cli.*;
+import org.apache.commons.lang.StringUtils;
+import org.opensky.avro.v2.ModeSEncodedMessage;
+import org.opensky.libadsb.Decoder;
+import org.opensky.libadsb.Position;
+import org.opensky.libadsb.PositionDecoder;
+import org.opensky.libadsb.exceptions.BadFormatException;
+import org.opensky.libadsb.msgs.AirbornePositionMsg;
+import org.opensky.libadsb.msgs.IdentificationMsg;
+import org.opensky.libadsb.msgs.ModeSReply;
+import org.opensky.libadsb.msgs.SurfacePositionMsg;
+import org.opensky.libadsb.tools;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -8,37 +25,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
-
-import org.apache.avro.file.DataFileReader;
-import org.apache.avro.io.DatumReader;
-import org.apache.avro.specific.SpecificDatumReader;
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.DefaultParser;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
-import org.apache.commons.lang.StringUtils;
-import org.opensky.avro.v2.ModeSEncodedMessage;
-import org.opensky.libadsb.Decoder;
-import org.opensky.libadsb.Position;
-import org.opensky.libadsb.PositionDecoder;
-import org.opensky.libadsb.tools;
-import org.opensky.libadsb.exceptions.BadFormatException;
-import org.opensky.libadsb.msgs.AirbornePositionMsg;
-import org.opensky.libadsb.msgs.IdentificationMsg;
-import org.opensky.libadsb.msgs.ModeSReply;
-import org.opensky.libadsb.msgs.SurfacePositionMsg;
-
-import de.micromata.opengis.kml.v_2_2_0.AltitudeMode;
-import de.micromata.opengis.kml.v_2_2_0.ColorMode;
-import de.micromata.opengis.kml.v_2_2_0.Coordinate;
-import de.micromata.opengis.kml.v_2_2_0.Document;
-import de.micromata.opengis.kml.v_2_2_0.Folder;
-import de.micromata.opengis.kml.v_2_2_0.Kml;
-import de.micromata.opengis.kml.v_2_2_0.Placemark;
-import de.micromata.opengis.kml.v_2_2_0.Style;
-import de.micromata.opengis.kml.v_2_2_0.TimeSpan;
 
 /**
  * OpenSky AVRO to Google Maps KML converter
