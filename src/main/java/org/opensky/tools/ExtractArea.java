@@ -8,21 +8,18 @@ import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.commons.cli.*;
 import org.opensky.avro.v2.ModeSEncodedMessage;
-import org.opensky.libadsb.Decoder;
+import org.opensky.libadsb.ModeSDecoder;
 import org.opensky.libadsb.Position;
-import org.opensky.libadsb.PositionDecoder;
 import org.opensky.libadsb.exceptions.BadFormatException;
-import org.opensky.libadsb.msgs.AirbornePositionMsg;
+import org.opensky.libadsb.msgs.AirbornePositionV0Msg;
 import org.opensky.libadsb.msgs.ModeSReply;
-import org.opensky.libadsb.msgs.SurfacePositionMsg;
+import org.opensky.libadsb.msgs.SurfacePositionV0Msg;
 import org.opensky.libadsb.tools;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 
 /**
  * This file filters data in avro files by geographic area and stores
@@ -53,13 +50,10 @@ public class ExtractArea {
 	 * generation
 	 */
 	private class Flight {
-		public PositionDecoder dec; // stateful position decoder
 		boolean is_in_area;
 		double last;
 
-
 		public Flight () {
-			dec = new PositionDecoder();
 			is_in_area = false;
 		}
 	}
@@ -166,8 +160,11 @@ public class ExtractArea {
 
 			// message registers
 			ModeSReply msg;
-			AirbornePositionMsg airpos;
-			SurfacePositionMsg surfacepos;
+			AirbornePositionV0Msg airpos;
+			SurfacePositionV0Msg surfacepos;
+
+			// Decoder
+			ModeSDecoder decoder = new ModeSDecoder();
 
 			// for handling flights
 			ExtractArea aoi = new ExtractArea();
@@ -186,21 +183,12 @@ public class ExtractArea {
 					continue;
 
 				// cleanup decoders every 1.000.000 messages to avoid excessive memory usage
-				// therefore, remove decoders which have not been used for more than one hour.
 				if (inCount%1000000 == 0) {
-					List<String> to_remove = new ArrayList<String>();
-					for (String key : flights.keySet()) {
-						if (flights.get(key).last<record.getTimeAtServer()-3600) {
-							to_remove.add(key);
-						}
-					}
-
-					for (String key : to_remove)
-						flights.remove(key);
+					decoder.gc();
 				}
 
 				try {
-					msg = Decoder.genericDecoder(record.getRawMessage().toString());
+					msg = decoder.decode(record.getRawMessage().toString());
 				} catch (BadFormatException e) {
 					continue; // also filter bad messages
 				}
@@ -221,42 +209,45 @@ public class ExtractArea {
 					flights.put(icao24, flight);
 					flights_cnt++;
 				}
-				
+
 				flight.last = record.getTimeAtServer();
 
-				///////// Airborne Position Messages
-				if (msg.getType() == ModeSReply.subtype.ADSB_AIRBORN_POSITION) {
-					airpos = (AirbornePositionMsg) msg;
-					Position rec = record.getSensorLatitude() != null ?
-							new Position(record.getSensorLongitude(), record.getSensorLatitude(), 0.0) : null;
-					Position pos = flight.dec.decodePosition(record.getTimeAtServer(), rec, airpos);
-					if (pos != null) {
-						pos.setAltitude(0.0); // two-dimensional radius
-						if (pos.isReasonable() && pos.distanceTo(center)<=radius)
-							flight.is_in_area = true;
-						else if (pos.isReasonable() && pos.distanceTo(center)>radius)
-							flight.is_in_area = false;
-					}
-				}
-				///////// Surface Position Messages
-				else if (msg.getType() == ModeSReply.subtype.ADSB_SURFACE_POSITION) {
-					surfacepos = (SurfacePositionMsg) msg;
-					Position rec = record.getSensorLatitude() != null ?
-							new Position(
-									record.getSensorLongitude(),
-									record.getSensorLatitude(),
-									record.getSensorAltitude()) : null;
+				switch (msg.getType()) {
+					case ADSB_AIRBORN_POSITION_V0:
+					case ADSB_AIRBORN_POSITION_V1:
+					case ADSB_AIRBORN_POSITION_V2:
+						airpos = (AirbornePositionV0Msg) msg;
+						Position rec = record.getSensorLatitude() != null ?
+								new Position(record.getSensorLongitude(), record.getSensorLatitude(), 0.0) : null;
+						Position pos = decoder.decodePosition(record.getTimeAtServer().longValue()*1000L, airpos, rec);
+						if (pos != null) {
+							pos.setAltitude(0.0); // two-dimensional radius
+							if (pos.isReasonable() && pos.distanceTo(center)<=radius)
+								flight.is_in_area = true;
+							else if (pos.isReasonable() && pos.distanceTo(center)>radius)
+								flight.is_in_area = false;
+						}
+						break;
+					case ADSB_SURFACE_POSITION_V0:
+					case ADSB_SURFACE_POSITION_V1:
+					case ADSB_SURFACE_POSITION_V2:
+						surfacepos = (SurfacePositionV0Msg) msg;
+						rec = record.getSensorLatitude() != null ?
+								new Position(
+										record.getSensorLongitude(),
+										record.getSensorLatitude(),
+										record.getSensorAltitude()) : null;
 
-					Position pos = flight.dec.decodePosition(record.getTimeAtServer(), rec, surfacepos, rec);
-					if (pos != null) {
-						pos.setAltitude(0.0); // two-dimensional radius
-						if (pos.isReasonable() && pos.distanceTo(center)<=radius)
-							flight.is_in_area = true;
-						else if (pos.isReasonable() && pos.distanceTo(center)>radius)
-							flight.is_in_area = false;
-					}
+						pos = decoder.decodePosition(record.getTimeAtServer().longValue()*1000L, surfacepos, rec);
+						if (pos != null) {
+							pos.setAltitude(0.0); // two-dimensional radius
+							if (pos.isReasonable() && pos.distanceTo(center)<=radius)
+								flight.is_in_area = true;
+							else if (pos.isReasonable() && pos.distanceTo(center)>radius)
+								flight.is_in_area = false;
+						}
 				}
-				
+
 				if (flight.is_in_area) {
 					fileWriter.append(record);
 					++outCount;

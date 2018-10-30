@@ -5,16 +5,15 @@ import org.apache.avro.file.DataFileReader;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.commons.cli.*;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.opensky.avro.v2.ModeSEncodedMessage;
-import org.opensky.libadsb.Decoder;
+import org.opensky.libadsb.ModeSDecoder;
 import org.opensky.libadsb.Position;
-import org.opensky.libadsb.PositionDecoder;
 import org.opensky.libadsb.exceptions.BadFormatException;
-import org.opensky.libadsb.msgs.AirbornePositionMsg;
+import org.opensky.libadsb.msgs.AirbornePositionV0Msg;
 import org.opensky.libadsb.msgs.IdentificationMsg;
 import org.opensky.libadsb.msgs.ModeSReply;
-import org.opensky.libadsb.msgs.SurfacePositionMsg;
+import org.opensky.libadsb.msgs.SurfacePositionV0Msg;
 import org.opensky.libadsb.tools;
 
 import java.io.File;
@@ -60,12 +59,10 @@ public class Avro2Kml {
 		public double last; // last message seen
 		public List<Coordinate> coords; // ordered list of coordinates
 		public List<Integer> serials; // flight seen by these sensors
-		public PositionDecoder dec; // stateful position decoder
 		boolean contains_unreasonable; // true if there was one position with unreasonable flag
 		
 		public Flight () {
 			coords = new ArrayList<Coordinate>();
-			dec = new PositionDecoder();
 			callsign = new char[0];
 			contains_unreasonable = false;
 			serials = new ArrayList<Integer>();
@@ -161,7 +158,7 @@ public class Avro2Kml {
 	}
 
 	public static void main(String[] args) {
-		
+
 		// define command line options
 		Options opts = new Options();
 		opts.addOption("h", "help", false, "print this message" );
@@ -170,7 +167,7 @@ public class Avro2Kml {
 		opts.addOption("s", "start", true, "only messages received after this time (unix timestamp)");
 		opts.addOption("e", "end", true, "only messages received before this time (unix timestamp)");
 		opts.addOption("n", "max-num", true, "max number of flights written to KML");
-		
+
 		// parse command line options
 		CommandLineParser parser = new DefaultParser();
 		CommandLine cmd;
@@ -182,7 +179,7 @@ public class Avro2Kml {
 		boolean option_nopos = true;
 		try {
 			cmd = parser.parse(opts, args);
-			
+
 			// parse arguments
 			try {
 				if (cmd.hasOption("i")) filter_icao24 = cmd.getOptionValue("i");
@@ -193,35 +190,35 @@ public class Avro2Kml {
 			} catch (NumberFormatException e) {
 				throw new ParseException("Invalid arguments: "+e.getMessage());
 			}
-			
+
 			// print help
 			if (cmd.hasOption("h")) {
 				printHelp(opts);
 				System.exit(0);
 			}
-			
+
 			// get filename
 			if (cmd.getArgList().size() != 2)
 				throw new ParseException("No avro file given or invalid arguments.");
 			file = cmd.getArgList().get(0);
 			out = cmd.getArgList().get(1);
-			
+
 		} catch (ParseException e) {
 			// parsing failed
 			System.err.println(e.getMessage()+"\n");
 			printHelp(opts);
 			System.exit(1);
 		}
-		
+
 		System.out.println("Opening avro file.");
-		
+
 		// check if file exists
 		try {
 			avro = new File(file);
 			if(!avro.exists() || avro.isDirectory() || !avro.canRead()) {
 				throw new FileNotFoundException("Avro file not found or cannot be read.");
 			}
-			
+
 			kmlfile = new File(out);
 			if(kmlfile.exists() || kmlfile.isDirectory())
 				throw new java.io.IOException("KML is a directory or file exists.");
@@ -234,81 +231,67 @@ public class Avro2Kml {
 			System.err.println("Error: "+e.getMessage()+"\n");
 			System.exit(1);
 		}
-		
+
 		DatumReader<ModeSEncodedMessage> datumReader = new SpecificDatumReader<ModeSEncodedMessage>(ModeSEncodedMessage.class);
 		long msgCount = 0, good_pos_cnt = 0, bad_pos_cnt = 0, flights_cnt = 0, err_pos_cnt = 0;
 		try {
 			DataFileReader<ModeSEncodedMessage> fileReader = new DataFileReader<ModeSEncodedMessage>(avro, datumReader);
-			
+
 			System.err.println("Options are:\n" + 
 					"\tfile: "+file+"\n"+
 					"\ticao24: "+filter_icao24+"\n"+
 					"\tstart: "+filter_start+"\n"+
 					"\tend: "+filter_end+"\n"+
 					"\tmax: "+filter_max+"\n");
-			
+
 			// stuff for handling flights
 			ModeSEncodedMessage record = new ModeSEncodedMessage();
 			HashMap<String, Flight> flights = new HashMap<String, Flight>();
 			Flight flight;
 			String icao24;
-			
+
 			// message registers
 			ModeSReply msg;
-			AirbornePositionMsg airpos;
-			SurfacePositionMsg surfacepos;
+			AirbornePositionV0Msg airpos;
+			SurfacePositionV0Msg surfacepos;
 			IdentificationMsg ident;
-			
+
 			// KML stuff
 			Avro2Kml a2k = new Avro2Kml();
 			OskyKml kml = a2k.new OskyKml();
-			
-			mainloop:
+
+			// Decoder
+			ModeSDecoder decoder = new ModeSDecoder();
+
 			while (fileReader.hasNext()) {
 				msgCount++;
-				
+
 				// get next record from file
 				record = fileReader.next(record);
-				
+
 				// time filters
 				if (filter_start != null && record.getTimeAtServer()<filter_start)
 					continue;
-				
+
 				if (filter_end != null && record.getTimeAtServer()>filter_end)
 					continue;
-				
+
 				// cleanup decoders every 1.000.000 messages to avoid excessive memory usage
-				// therefore, remove decoders which have not been used for more than one hour.
 				if (msgCount % 1000000 == 0) {
-					List<String> to_remove = new ArrayList<String>();
-					for (String key : flights.keySet()) {
-						if (flights.get(key).last<record.getTimeAtServer()-3600) {
-							to_remove.add(key);
-						}
-					}
-
-					for (String key : to_remove) {
-						// number of flights filter
-						if (filter_max != null && kml.getNumberOfFlights()>=filter_max)
-							break mainloop;
-
-						if (option_nopos | flights.get(key).coords.size() > 0)
-							kml.addFlight(flights.get(key));
-						flights.remove(key);
-					}
+					decoder.gc();
 				}
-				
+
 				try {
-					msg = Decoder.genericDecoder(record.getRawMessage().toString());
+					msg = decoder.decode(record.getRawMessage().toString());
 				} catch (BadFormatException e) {
 					continue;
 				}
 				icao24 = tools.toHexString(msg.getIcao24());
-				
+
 				// icao24 filter
 				if (filter_icao24 != null && !icao24.equals(filter_icao24))
 					continue;
-				
+
 				// select current flight
 				if (flights.containsKey(icao24))
 					flight = flights.get(icao24);
@@ -321,21 +304,22 @@ public class Avro2Kml {
 				}
 
 				flight.last = record.getTimeAtServer();
-				
+
 				if (!flight.serials.contains(record.getSensorSerialNumber()))
 					flight.serials.add(record.getSensorSerialNumber());
 
 				///////// Airborne Position Messages
-				if (msg.getType() == ModeSReply.subtype.ADSB_AIRBORN_POSITION) {
-					airpos = (AirbornePositionMsg) msg;
+				if (msg.getType() == ModeSReply.subtype.ADSB_AIRBORN_POSITION_V0 ||
+						msg.getType() == ModeSReply.subtype.ADSB_AIRBORN_POSITION_V1 ||
+						msg.getType() == ModeSReply.subtype.ADSB_AIRBORN_POSITION_V2) {
+					airpos = (AirbornePositionV0Msg) msg;
 					Position rec = record.getSensorLatitude() != null ?
 							new Position(
 									record.getSensorLongitude(),
 									record.getSensorLatitude(),
 									record.getSensorAltitude()) : null;
-					
-					airpos.setNICSupplementA(flight.dec.getNICSupplementA());
-					Position pos = flight.dec.decodePosition(record.getTimeAtServer(), rec, airpos);
+
+					Position pos = decoder.decodePosition(record.getTimeAtServer().longValue()*1000L, airpos, rec);
 					if (pos == null)
 						++err_pos_cnt;
 					else {
@@ -355,21 +339,23 @@ public class Avro2Kml {
 					}
 				}
 				///////// Surface Position Messages
-				else if (msg.getType() == ModeSReply.subtype.ADSB_SURFACE_POSITION) {
-					surfacepos = (SurfacePositionMsg) msg;
+				else if (msg.getType() == ModeSReply.subtype.ADSB_SURFACE_POSITION_V0 ||
+						msg.getType() == ModeSReply.subtype.ADSB_SURFACE_POSITION_V1 ||
+						msg.getType() == ModeSReply.subtype.ADSB_SURFACE_POSITION_V2) {
+					surfacepos = (SurfacePositionV0Msg) msg;
 					Position rec = record.getSensorLatitude() != null ?
 							new Position(
 									record.getSensorLongitude(),
 									record.getSensorLatitude(),
 									record.getSensorAltitude()) : null;
-					
-					Position pos = flight.dec.decodePosition(record.getTimeAtServer(), rec, surfacepos, rec);
+
+					Position pos = decoder.decodePosition(record.getTimeAtServer().longValue()*1000L, surfacepos, rec);
 					if (pos == null)
 						++err_pos_cnt;
 					else {
 						if (pos.isReasonable()) {
 							Coordinate coord = new Coordinate(pos.getLongitude(), pos.getLatitude(), 0);
-							
+
 							if (!flight.coords.contains(coord)) { // remove duplicates to safe memory
 								flight.coords.add(coord);
 								++good_pos_cnt;
@@ -387,7 +373,7 @@ public class Avro2Kml {
 					flight.callsign = ident.getIdentity();
 				}
 			}
-			
+
 			// write residual flights to KML
 			for (String key : flights.keySet()) {
 				// number of flights filter
@@ -396,10 +382,10 @@ public class Avro2Kml {
 				if (option_nopos | flights.get(key).coords.size() > 0)
 					kml.addFlight(flights.get(key));
 			}
-			
+
 			fileReader.close();
 			kml.writeToFile(kmlfile);
-			
+
 		} catch (IOException e) {
 			// error while trying to read file
 			System.err.println("IO Error: "+e.getMessage());
@@ -410,7 +396,7 @@ public class Avro2Kml {
 			e.printStackTrace();
 			System.exit(1);
 		}
-		
+
 		System.err.println("Read "+msgCount+" messages.");
 		System.err.println("Good positions: "+good_pos_cnt);
 		System.err.println("Bad positions: "+bad_pos_cnt);

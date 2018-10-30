@@ -161,8 +161,12 @@ public class ExtractADSB {
 						continue;
 					}
 					
-					if (filter_pos && (reply.getType() == subtype.ADSB_AIRBORN_POSITION
-							|| reply.getType() == subtype.ADSB_SURFACE_POSITION)) {
+					if (filter_pos && (reply.getType() == subtype.ADSB_AIRBORN_POSITION_V0
+							|| reply.getType() == subtype.ADSB_AIRBORN_POSITION_V1
+							|| reply.getType() == subtype.ADSB_AIRBORN_POSITION_V2
+							|| reply.getType() == subtype.ADSB_SURFACE_POSITION_V0
+							|| reply.getType() == subtype.ADSB_SURFACE_POSITION_V1
+							|| reply.getType() == subtype.ADSB_SURFACE_POSITION_V2)) {
 						++filtered_cnt;
 						continue;
 					}
@@ -179,7 +183,11 @@ public class ExtractADSB {
 					}
 					
 					if (filter_misc && (reply.getType() == subtype.ADSB_EMERGENCY
-							|| reply.getType() == subtype.ADSB_STATUS
+							|| reply.getType() == subtype.ADSB_STATUS_V0
+							|| reply.getType() == subtype.ADSB_AIRBORN_STATUS_V1
+							|| reply.getType() == subtype.ADSB_AIRBORN_STATUS_V2
+							|| reply.getType() == subtype.ADSB_SURFACE_STATUS_V1
+							|| reply.getType() == subtype.ADSB_SURFACE_STATUS_V2
 							|| reply.getType() == subtype.ADSB_TCAS)) {
 						++filtered_cnt;
 						continue;

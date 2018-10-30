@@ -5,9 +5,8 @@ import org.apache.avro.io.DatumReader;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.commons.cli.*;
 import org.opensky.avro.v2.ModeSEncodedMessage;
-import org.opensky.libadsb.Decoder;
+import org.opensky.libadsb.ModeSDecoder;
 import org.opensky.libadsb.Position;
-import org.opensky.libadsb.PositionDecoder;
 import org.opensky.libadsb.exceptions.BadFormatException;
 import org.opensky.libadsb.msgs.*;
 import org.opensky.libadsb.tools;
@@ -18,9 +17,7 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Locale;
 
 /**
@@ -163,14 +160,12 @@ public class Avro2SQLite {
 	private class Flight {
 		public long id; // flight id
 		public Double last; // last position message received
-		public PositionDecoder dec; // stateful position decoder
 		public Position last_position;
 		public double last_velocity;
 		public double last_heading;
 		public double last_vertical_rate;
 
 		public Flight (long id) {
-			dec = new PositionDecoder();
 			this.id = id;
 			this.last_position = new Position();
 		}
@@ -275,20 +270,20 @@ public class Avro2SQLite {
 
 			// message registers
 			ModeSReply msg;
-			AirbornePositionMsg airpos;
-			SurfacePositionMsg surfacepos;
+			AirbornePositionV0Msg airpos;
+			SurfacePositionV0Msg surfacepos;
 			IdentificationMsg ident;
 			VelocityOverGroundMsg velo;
 
-			// for flight handling
-			List<String> flights_to_remove = new ArrayList<String>();
+			// Decoder
+			ModeSDecoder decoder = new ModeSDecoder();
 
 			// for msg rate
 			last_time = System.currentTimeMillis();
 			while (fileReader.hasNext()) {
 				// count messages
 				msgs_cnt++;
-				
+
 				// print processing rate
 				if (System.currentTimeMillis() - last_time > 1000) {
 					System.err.format("\r%6d msgs/s", msgs_cnt-last_msgs_cnt);
@@ -310,22 +305,12 @@ public class Avro2SQLite {
 				}
 
 				// cleanup decoders every 1000000 messages to avoid excessive memory usage
-				// therefore, remove decoders which have not been used for more than one hour.
 				if (msgs_cnt%1000000 == 0) {
-					for (String key : flights.keySet()) {
-						if (flights.get(key).last<record.getTimeAtServer()-3600) {
-							flights_to_remove.add(key);
-						}
-					}
-
-					// remove and clear
-					for (String key : flights_to_remove)
-						flights.remove(key);
-					flights_to_remove.clear();
+					decoder.gc();
 				}
 
 				try {
-					msg = Decoder.genericDecoder(record.getRawMessage().toString());
+					msg = decoder.decode(record.getRawMessage().toString());
 				} catch (BadFormatException e) {
 					continue;
 				}
@@ -353,23 +338,23 @@ public class Avro2SQLite {
 					++flights_cnt;
 
 					a2sql.insertFlight(flight, record.getTimeAtServer(), icao24);
-					
 				}
 
 				flight.last = record.getTimeAtServer();
 				a2sql.updateFlight(flight.id, flight.last, null);
 
 				///////// Airborne Position Messages
-				if (!noposition && msg.getType() == ModeSReply.subtype.ADSB_AIRBORN_POSITION) {
-					airpos = (AirbornePositionMsg) msg;
+				if (!noposition && (msg.getType() == ModeSReply.subtype.ADSB_AIRBORN_POSITION_V0 ||
+					msg.getType() == ModeSReply.subtype.ADSB_AIRBORN_POSITION_V1 ||
+					msg.getType() == ModeSReply.subtype.ADSB_AIRBORN_POSITION_V2)) {
+					airpos = (AirbornePositionV0Msg) msg;
 					Position rec = record.getSensorLatitude() != null ?
 							new Position(
 									record.getSensorLongitude(),
 									record.getSensorLatitude(),
 									record.getSensorAltitude()) : null;
 
-					airpos.setNICSupplementA(flight.dec.getNICSupplementA());
-					Position pos = flight.dec.decodePosition(record.getTimeAtServer(), rec, airpos);
+					Position pos = decoder.decodePosition(record.getTimeAtServer().longValue()*1000L, airpos, rec);
 					if (pos == null || !pos.isReasonable())
 						++bad_pos_cnt;
 					else if (pos.isReasonable() && !pos.equals(flight.last_position)) { // filter duplicate positions
@@ -380,15 +365,17 @@ public class Avro2SQLite {
 				}
 
 				///////// Surface Position Messages
-				else if (!noposition && msg.getType() == ModeSReply.subtype.ADSB_SURFACE_POSITION) {
-					surfacepos = (SurfacePositionMsg) msg;
+				else if (!noposition && (msg.getType() == ModeSReply.subtype.ADSB_SURFACE_POSITION_V0 ||
+					msg.getType() == ModeSReply.subtype.ADSB_SURFACE_POSITION_V1 ||
+					msg.getType() == ModeSReply.subtype.ADSB_SURFACE_POSITION_V2)) {
+					surfacepos = (SurfacePositionV0Msg) msg;
 					Position rec = record.getSensorLatitude() != null ?
 							new Position(
 									record.getSensorLongitude(),
 									record.getSensorLatitude(),
 									record.getSensorAltitude()) : null;
 
-					Position pos = flight.dec.decodePosition(record.getTimeAtServer(), rec, surfacepos, rec);
+					Position pos = decoder.decodePosition(record.getTimeAtServer().longValue()*1000L, surfacepos, rec);
 					if (pos == null || !pos.isReasonable())
 						++bad_pos_cnt;
 					else if (pos.isReasonable() && !pos.equals(flight.last_position)) { // filter duplicate positions
@@ -416,18 +403,18 @@ public class Avro2SQLite {
 							flight.last_vertical_rate = velo.getVerticalRate();
 
 						a2sql.insertVelocity(flight.id, flight.last, flight.last_velocity, flight.last_heading,
-								velo.hasVerticalRateInfo() ? velo.getVerticalRate() : null);
+								velo.hasVerticalRateInfo() ? tools.feetPerMinute2MetersPerSecond(velo.getVerticalRate()) : null);
 					}
 					else if (velo.hasVerticalRateInfo() && velo.getVerticalRate() != flight.last_vertical_rate) {
 						flight.last_vertical_rate = velo.getVerticalRate();
 						a2sql.insertVelocity(flight.id, flight.last, null, null, flight.last_vertical_rate);
 					}
 				}
-				
+
 				// ignore any other message
 				else ignored_cnt++;
 			}
-			
+
 			a2sql.conn.commit();
 
 			fileReader.close();
@@ -442,7 +429,7 @@ public class Avro2SQLite {
 			e.printStackTrace();
 			System.exit(1);
 		}
-		
+
 		System.err.println("\n\nStatistics:");
 		System.err.format("\tTotal messages: %d\n", msgs_cnt);
 		System.err.format("\tFiltered messages: %d\n", filtered_cnt);

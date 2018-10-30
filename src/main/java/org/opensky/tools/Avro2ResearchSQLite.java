@@ -5,11 +5,10 @@ import org.apache.avro.io.DatumReader;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.commons.cli.*;
 import org.opensky.avro.v2.ModeSEncodedMessage;
-import org.opensky.libadsb.Decoder;
+import org.opensky.libadsb.ModeSDecoder;
 import org.opensky.libadsb.Position;
-import org.opensky.libadsb.PositionDecoder;
 import org.opensky.libadsb.exceptions.BadFormatException;
-import org.opensky.libadsb.msgs.AirbornePositionMsg;
+import org.opensky.libadsb.msgs.AirbornePositionV0Msg;
 import org.opensky.libadsb.msgs.ModeSReply;
 import org.opensky.libadsb.msgs.ModeSReply.subtype;
 import org.opensky.libadsb.msgs.VelocityOverGroundMsg;
@@ -21,9 +20,6 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Locale;
 
 /**
@@ -138,20 +134,6 @@ public class Avro2ResearchSQLite {
 				opts, "");
 	}
 
-	/**
-	 * This class is a container for all information
-	 * about flights that are relevant for the SQLite DB
-	 * generation
-	 */
-	private class Flight {
-		public Double last; // last position message received
-		public PositionDecoder dec; // stateful position decoder
-
-		public Flight (long id) {
-			dec = new PositionDecoder();
-		}
-	}
-
 	public static void main(String[] args) {
 
 		// define command line options
@@ -225,7 +207,7 @@ public class Avro2ResearchSQLite {
 
 		// some counters for statistics
 		long msgs_cnt = 0, good_pos_cnt = 0, bad_pos_cnt = 0,
-				flights_cnt = 0, filtered_cnt = 0, ignored_cnt = 0,
+				filtered_cnt = 0, ignored_cnt = 0,
 				last_msgs_cnt = 0;
 		long last_time;
 
@@ -238,19 +220,17 @@ public class Avro2ResearchSQLite {
 
 			// stuff for handling flights
 			ModeSEncodedMessage record = new ModeSEncodedMessage();
-			HashMap<String, Flight> flights = new HashMap<String, Flight>();
 
 			// temporary pointers
-			Flight flight;
 			String icao24;
 
 			// message registers
 			ModeSReply msg;
-			AirbornePositionMsg airpos;
+			AirbornePositionV0Msg airpos;
 			VelocityOverGroundMsg velo;
 
-			// for flight handling
-			List<String> flights_to_remove = new ArrayList<String>();
+			// Decoder
+			ModeSDecoder decoder = new ModeSDecoder();
 
 			// for msg rate
 			last_time = System.currentTimeMillis();
@@ -279,22 +259,12 @@ public class Avro2ResearchSQLite {
 				}
 
 				// cleanup decoders every 1000000 messages to avoid excessive memory usage
-				// therefore, remove decoders which have not been used for more than one hour.
 				if (msgs_cnt%1000000 == 0) {
-					for (String key : flights.keySet()) {
-						if (flights.get(key).last<record.getTimeAtServer()-3600) {
-							flights_to_remove.add(key);
-						}
-					}
-
-					// remove and clear
-					for (String key : flights_to_remove)
-						flights.remove(key);
-					flights_to_remove.clear();
+					decoder.gc();
 				}
 
 				try {
-					msg = Decoder.genericDecoder(record.getRawMessage().toString());
+					msg = decoder.decode(record.getRawMessage().toString());
 				} catch (BadFormatException e) {
 					continue;
 				}
@@ -304,8 +274,10 @@ public class Avro2ResearchSQLite {
 								record.getSensorLongitude(),
 								record.getSensorLatitude(),
 								record.getSensorAltitude()) : null;
-				
-				if (msg.getType() == subtype.ADSB_AIRBORN_POSITION) {
+
+				if (msg.getType() == subtype.ADSB_AIRBORN_POSITION_V0 ||
+						msg.getType() == subtype.ADSB_AIRBORN_POSITION_V1 ||
+						msg.getType() == subtype.ADSB_AIRBORN_POSITION_V2) {
 					icao24 = tools.toHexString(msg.getIcao24());
 
 					// icao24 filter
@@ -314,28 +286,9 @@ public class Avro2ResearchSQLite {
 						continue;
 					}
 
-					// select current flight
-					if (flights.containsKey(icao24))
-						flight = flights.get(icao24);
-					else {
-						// filter max flights
-						if (filter_max != null && flights_cnt>filter_max) {
-							filtered_cnt++;
-							continue;
-						}
+					airpos = (AirbornePositionV0Msg) msg;
 
-						// new flight
-						flight = a2sql.new Flight(flights_cnt);
-						flights.put(icao24, flight);
-						++flights_cnt;
-					}
-
-					flight.last = record.getTimeAtServer();
-
-					airpos = (AirbornePositionMsg) msg;
-
-					airpos.setNICSupplementA(flight.dec.getNICSupplementA());
-					Position pos = flight.dec.decodePosition(record.getTimeAtServer(), rec, airpos);
+					Position pos = decoder.decodePosition(record.getTimeAtServer().longValue()*1000L, airpos, rec);
 					if (pos == null || !pos.isReasonable())
 						++bad_pos_cnt;
 					else if (pos.isReasonable()) {
@@ -356,10 +309,10 @@ public class Avro2ResearchSQLite {
 						a2sql.insertVelocity(record.getSensorSerialNumber(),  record.getTimeAtServer(),
 								record.getTimeAtSensor() != null ? Math.round(record.getTimeAtSensor()) : null,
 								record.getTimestamp() != null ? Math.round(record.getTimestamp()) : null,
-								velo.hasVelocityInfo() ? velo.getVelocity() : null,
-								velo.hasVerticalRateInfo() ? velo.getVerticalRate() : null,
+								velo.hasVelocityInfo() ? tools.knots2MetersPerSecond(velo.getVelocity().intValue()) : null,
+								velo.hasVerticalRateInfo() ? tools.feetPerMinute2MetersPerSecond(velo.getVerticalRate()) : null,
 								velo.hasVelocityInfo() ? velo.getHeading() : null, 
-								velo.hasGeoMinusBaroInfo() ? velo.getGeoMinusBaro() : null,
+								velo.hasGeoMinusBaroInfo() ? tools.feet2Meters(velo.getGeoMinusBaro()) : null,
 								record.getRawMessage().toString());
 					}
 				}
@@ -386,7 +339,6 @@ public class Avro2ResearchSQLite {
 		System.err.format("\tTotal messages: %d\n", msgs_cnt);
 		System.err.format("\tFiltered messages: %d\n", filtered_cnt);
 		System.err.format("\tIgnored messages: %d\n", ignored_cnt);
-		System.err.format("\tFlights: %d\n\n", flights_cnt);
 		System.err.format("\tGood positions: %d\n", good_pos_cnt);
 		System.err.format("\tBad positions: %d\n", bad_pos_cnt);
 	}
