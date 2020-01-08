@@ -222,9 +222,9 @@ public class ExtractArea {
 						Position pos = decoder.decodePosition(record.getTimeAtServer().longValue()*1000L, airpos, rec);
 						if (pos != null) {
 							pos.setAltitude(0.0); // two-dimensional radius
-							if (pos.isReasonable() && pos.distanceTo(center)<=radius)
+							if (pos.isReasonable() && pos.haversine(center)<=radius)
 								flight.is_in_area = true;
-							else if (pos.isReasonable() && pos.distanceTo(center)>radius)
+							else if (pos.isReasonable() && pos.haversine(center)>radius)
 								flight.is_in_area = false;
 						}
 						break;
@@ -241,9 +241,9 @@ public class ExtractArea {
 						pos = decoder.decodePosition(record.getTimeAtServer().longValue()*1000L, surfacepos, rec);
 						if (pos != null) {
 							pos.setAltitude(0.0); // two-dimensional radius
-							if (pos.isReasonable() && pos.distanceTo(center)<=radius)
+							if (pos.isReasonable() && pos.haversine(center)<=radius)
 								flight.is_in_area = true;
-							else if (pos.isReasonable() && pos.distanceTo(center)>radius)
+							else if (pos.isReasonable() && pos.haversine(center)>radius)
 								flight.is_in_area = false;
 						}
 				}
